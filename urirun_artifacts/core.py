@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -246,4 +247,30 @@ def main(argv: list[str] | None = None) -> int:
     return ARTIFACT.cli(argv, manifest_prose=urirun.load_manifest(__package__))
 
 
-urirun_bindings = ARTIFACT.bindings
+_ALIAS_SCHEME = "schema"
+
+
+def urirun_bindings() -> dict[str, Any]:
+    """Bindings for the registry under BOTH schemes.
+
+    Canonical ``artifact://`` is kept (no consumer breaks); every route is ALSO exposed
+    under the ``schema://`` alias so the schema-registry semantics can be addressed
+    distinctly from the frozen-artifact *file store* (which also lives on ``artifact://``).
+    The alias routes reuse the same handlers (identical python module/export), so there is
+    a single implementation. The runtime resolves ``schema://`` to this connector because
+    its scheme index is built from the binding URIs, not the entry-point name.
+    """
+    base = ARTIFACT.bindings()
+    bindings = dict(base.get("bindings") or {})
+    prefix = f"{CONNECTOR_ID}://"
+    alias_prefix = f"{_ALIAS_SCHEME}://"
+    for uri, spec in list(bindings.items()):
+        if not uri.startswith(prefix):
+            continue
+        alias_uri = alias_prefix + uri[len(prefix):]
+        if alias_uri in bindings:
+            continue
+        alias_spec = copy.deepcopy(spec)
+        alias_spec["uri"] = alias_uri
+        bindings[alias_uri] = alias_spec
+    return {**base, "bindings": bindings}

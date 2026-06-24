@@ -1,7 +1,7 @@
 {
   "id": "artifact",
   "name": "Artifact data-model registry",
-  "uriSchemes": ["artifact"],
+  "uriSchemes": ["artifact", "schema"],
   "status": "available",
   "category": "Data modelling",
   "summary": "A URI-addressable registry of artifact data models — what a faktura, rachunek or paragon IS. Pydantic is the source of truth; JSON Schema, proto3 and example instances are derived from it, so any query can attach an artifact's expected structure as context over artifact://host/schema/query/get.",

@@ -13,7 +13,32 @@ def test_bindings_valid():
     assert "artifact://host/schema/query/validate" in uris
     for spec in b["bindings"].values():
         assert spec["python"]["module"].endswith("core")
-        assert spec["uri"].startswith("artifact://")
+        assert spec["uri"].split("://", 1)[0] in {"artifact", "schema"}
+
+
+def test_schema_alias_mirrors_every_artifact_route():
+    # Non-breaking split: the schema registry is ALSO addressable under schema:// (distinct
+    # from the frozen-artifact file store on artifact://), reusing the same handlers.
+    b = c.urirun_bindings()["bindings"]
+    artifact_uris = {u for u in b if u.startswith("artifact://")}
+    schema_uris = {u for u in b if u.startswith("schema://")}
+    assert artifact_uris, "canonical artifact:// routes must remain"
+    assert schema_uris == {"schema://" + u[len("artifact://"):] for u in artifact_uris}
+    # twin routes reuse the same handler export
+    assert b["schema://host/schema/query/get"]["python"]["export"] == \
+        b["artifact://host/schema/query/get"]["python"]["export"]
+
+
+def test_schema_alias_runs_through_compiled_registry():
+    import urirun
+    from urirun import v2
+
+    registry = urirun.compile_registry(json.loads(json.dumps(c.urirun_bindings())))
+    env = v2.run("schema://host/registry/query/domains", registry, payload={}, mode="execute",
+                 policy=urirun.policy(allow=["schema://*"]))
+    assert env["ok"] is True, env
+    data = urirun.result_data(env)
+    assert "accounting" in (data.get("domains") or data)
 
 
 def test_registry_has_core_artifacts():
