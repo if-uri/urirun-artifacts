@@ -80,3 +80,48 @@ def test_search_finds_by_keyword():
     r = c.search(q="vat")
     ids = {a["id"] for a in r["artifacts"]}
     assert "faktura" in ids
+
+
+def test_new_domains_registered():
+    ids = set(registry.all_ids())
+    # one representative per new domain
+    for aid in ("planned-ticket", "flow", "photo", "detected-object", "ledger-entry",
+                "request-object", "invoice-draft", "ksef-upo", "faktura-ksef"):
+        assert aid in ids, aid
+    doms = registry.domains()
+    for d in ("workflow", "scanning", "infra", "request", "accounting"):
+        assert d in doms, d
+
+
+def test_enum_values_in_schema():
+    # VAT rate / currency enums must surface their allowed values in the derived JSON Schema.
+    sch = c.get_schema(name="invoice-draft", fmt="json-schema")["schema"]
+    # FakturaKSeF carries byRate -> RateAmount -> VatRate enum in $defs
+    fk = c.get_schema(name="faktura-ksef", fmt="json-schema")["schema"]
+    defs = fk.get("$defs", {})
+    rate_enum = defs.get("VatRate", {}).get("enum") or []
+    assert "23" in rate_enum and "zw" in rate_enum
+
+
+def test_request_check_missing_fields():
+    # user asked to create a faktura but only gave a couple of fields
+    r = c.request_check(artifact="faktura", data=json.dumps({"seller": {"name": "ACME"}}))
+    assert r["ok"] and r["valid"] is False
+    # number/issueDate/buyer are required and missing
+    assert {"number", "issueDate", "buyer"}.issubset(set(r["missingRequired"]))
+
+
+def test_request_check_ready_request():
+    payload = {"number": "FV 1/2026", "issueDate": "2026-06-24",
+               "seller": {"name": "ACME"}, "buyer": {"name": "Klient"}}
+    r = c.request_check(artifact="faktura", data=json.dumps(payload))
+    assert r["ok"] and r["valid"] is True and not r["missingRequired"]
+
+
+def test_request_check_reports_type_error_not_missing():
+    # net must be a number; a string is a type error, not a missing field
+    payload = {"number": "X", "issueDate": "2026-06-24", "seller": {"name": "A"},
+               "buyer": {"name": "B"}, "net": "not-a-number"}
+    r = c.request_check(artifact="faktura", data=json.dumps(payload))
+    fields = {e["field"] for e in r["errors"]}
+    assert "net" in fields and r["valid"] is False

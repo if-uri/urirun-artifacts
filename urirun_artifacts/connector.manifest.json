@@ -23,7 +23,8 @@
     "artifact://host/schema/query/get",
     "artifact://host/schema/query/proto",
     "artifact://host/schema/query/example",
-    "artifact://host/schema/query/validate"
+    "artifact://host/schema/query/validate",
+    "artifact://host/request/query/check"
   ],
   "useCases": [
     "Attach the expected structure of a faktura to an LLM query (json-schema).",
