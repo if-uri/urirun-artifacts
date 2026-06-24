@@ -198,6 +198,50 @@ def validate(name: str = "", data: str = "") -> dict[str, Any]:
             "normalised": obj.model_dump(mode="json")}
 
 
+@ARTIFACT.handler("request/query/check", isolated=True,
+                  meta={"label": "Check a human's chat request against an artifact type", "cliAlias": "request-check"})
+def request_check(artifact: str = "", data: str = "") -> dict[str, Any]:
+    """Validate what a human asked for in chat. Given the target `artifact` type (e.g. faktura)
+    and the `fields` extracted from their prompt (`data`, a JSON object), report which required
+    fields are present, which are still missing, which are unknown, and whether the request is
+    ready to act on. This is the gate the chat planner uses to decide whether to ask a follow-up
+    question. Required = the artifact's required fields that have no default."""
+    model = _resolve(artifact)
+    if model is None:
+        return {"ok": False, "error": f"unknown artifact '{artifact}'", "connector": CONNECTOR_ID,
+                "known": registry.all_ids()}
+    try:
+        provided = json.loads(data) if data else {}
+    except json.JSONDecodeError as exc:
+        return {"ok": False, "error": f"data is not valid JSON: {exc}", "connector": CONNECTOR_ID}
+    if not isinstance(provided, dict):
+        return {"ok": False, "error": "data must be a JSON object", "connector": CONNECTOR_ID}
+
+    required = {name for name, f in model.model_fields.items() if f.is_required()}
+    known = set(model.model_fields)
+    given = set(provided)
+    present = sorted(required & given)
+    missing = sorted(required - given)
+    extra = sorted(given - known)
+
+    # Type-check the fields that were given (without enforcing the missing required ones).
+    errors: list[dict[str, Any]] = []
+    try:
+        model.model_validate(provided)
+    except Exception as exc:  # pydantic.ValidationError
+        rows = getattr(exc, "errors", lambda: [])()
+        for e in rows:
+            field = ".".join(str(p) for p in e.get("loc", ()))
+            # a "missing" error is already captured by `missing`; keep only real type errors
+            if e.get("type") != "missing":
+                errors.append({"field": field, "message": e.get("msg")})
+
+    valid = not missing and not errors
+    return {"ok": True, "connector": CONNECTOR_ID, "kind": "request-check", "live": False,
+            "artifactType": artifact, "valid": valid, "present": present,
+            "missingRequired": missing, "extra": extra, "errors": errors}
+
+
 def main(argv: list[str] | None = None) -> int:
     return ARTIFACT.cli(argv, manifest_prose=urirun.load_manifest(__package__))
 
