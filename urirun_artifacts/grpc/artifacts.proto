@@ -1,0 +1,67 @@
+// Author: Tom Sapletta · https://tom.sapletta.com
+// Part of the ifURI solution.
+//
+// gRPC service that wraps the artifact registry. The per-artifact MESSAGES (Faktura, Rachunek,
+// Paragon, ...) are generated from the Pydantic models on demand —
+//   artifact://host/schema/query/proto?name=faktura
+// — because Pydantic is the source of truth. This file is the stable SERVICE envelope around
+// them: list the registry, fetch a schema/proto, and validate a payload over gRPC, mirroring
+// the artifact:// routes one-to-one. Run protoc on this + the generated messages for stubs.
+
+syntax = "proto3";
+
+package urirun.artifacts.v1;
+
+// --- requests / responses -------------------------------------------------------------------
+
+message ArtifactRef {
+  string id = 1;        // e.g. "faktura"
+  string domain = 2;    // e.g. "accounting"
+  string title = 3;     // human label
+  string version = 4;   // semver of the artifact definition
+  repeated string keywords = 5;
+}
+
+message ListRequest {
+  string domain = 1;    // optional filter; empty = all
+}
+message ListResponse {
+  repeated ArtifactRef artifacts = 1;
+}
+
+// fmt: "json-schema" | "pydantic" | "proto"
+message SchemaRequest {
+  string name = 1;
+  string fmt = 2;
+}
+message SchemaResponse {
+  bool ok = 1;
+  string format = 2;
+  string schema = 3;    // JSON Schema (JSON) or proto3 text, by fmt
+  string error = 4;
+}
+
+message ValidateRequest {
+  string name = 1;
+  string data = 2;      // JSON object as a string
+}
+message FieldError {
+  string field = 1;
+  string message = 2;
+}
+message ValidateResponse {
+  bool valid = 1;
+  string normalised = 2;          // JSON of the normalised object when valid
+  repeated FieldError errors = 3;
+}
+
+// --- service ---------------------------------------------------------------------------------
+
+service ArtifactRegistry {
+  // List registered artifacts (optionally filtered by domain).
+  rpc List(ListRequest) returns (ListResponse);
+  // Fetch one artifact's structure in the requested format.
+  rpc GetSchema(SchemaRequest) returns (SchemaResponse);
+  // Validate a payload against a named artifact.
+  rpc Validate(ValidateRequest) returns (ValidateResponse);
+}

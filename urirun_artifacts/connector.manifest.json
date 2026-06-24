@@ -1,0 +1,54 @@
+{
+  "id": "artifact",
+  "name": "Artifact data-model registry",
+  "uriSchemes": ["artifact"],
+  "status": "available",
+  "category": "Data modelling",
+  "summary": "A URI-addressable registry of artifact data models — what a faktura, rachunek or paragon IS. Pydantic is the source of truth; JSON Schema, proto3 and example instances are derived from it, so any query can attach an artifact's expected structure as context over artifact://host/schema/query/get.",
+  "description": "artifact:// puts the office's data models behind a URI so they stop living as scattered dataclasses. Each artifact (faktura, rachunek, paragon, document, contact, ...) is a single Pydantic model registered by id; everything else is derived from it, which keeps the four representations the flow needs in lockstep. artifact://host/registry/query/list and .../domains enumerate the catalogue; .../search finds a type by id/title/keyword. artifact://host/schema/query/get?name=faktura&fmt=json-schema returns the JSON Schema (Draft 2020-12) you attach to a query so an LLM or validator knows the expected shape; fmt=proto returns a proto3 message (for gRPC/cross-language, wrapped by grpc/artifacts.proto); fmt=pydantic returns the typed field list. artifact://host/schema/query/example?name=faktura returns a starter instance, and artifact://host/schema/query/validate?name=faktura checks a parsed payload against the model — the gate before a flow trusts a scanned invoice. Pairs with invoice:// (which extracts the fields a Faktura validates against), camera:// (scan → paragon) and the sheet:// / sqlite-context:// stores.",
+  "requires": {
+    "python": ["urirun", "pydantic>=2"],
+    "optional": ["grpcio-tools (protoc) to compile the generated .proto into gRPC stubs"]
+  },
+  "keywords": ["artifact", "schema", "pydantic", "json-schema", "protobuf", "grpc", "faktura", "rachunek", "paragon", "data-model"],
+  "publisher": {
+    "name": "if-uri",
+    "url": "https://ifuri.com",
+    "github": "https://github.com/if-uri"
+  },
+  "routes": [
+    "artifact://host/registry/query/list",
+    "artifact://host/registry/query/domains",
+    "artifact://host/registry/query/search",
+    "artifact://host/schema/query/get",
+    "artifact://host/schema/query/proto",
+    "artifact://host/schema/query/example",
+    "artifact://host/schema/query/validate"
+  ],
+  "useCases": [
+    "Attach the expected structure of a faktura to an LLM query (json-schema).",
+    "Validate a payload parsed by invoice:// against the Faktura model.",
+    "List every artifact the system understands, grouped by domain.",
+    "Generate a proto3 message for an artifact to share with a gRPC service.",
+    "Hand a flow a starter example instance of an artifact to fill in."
+  ],
+  "examples": [
+    {
+      "title": "Get the faktura JSON Schema",
+      "uri": "artifact://host/schema/query/get",
+      "payload": { "name": "faktura", "fmt": "json-schema" }
+    },
+    {
+      "title": "Validate a parsed invoice against the model",
+      "uri": "artifact://host/schema/query/validate",
+      "payload": { "name": "faktura", "data": "{\"number\":\"FV 7/2026\",\"issueDate\":\"2026-05-13\",\"seller\":{\"name\":\"ACME\"},\"buyer\":{\"name\":\"Klient\"}}" }
+    }
+  ],
+  "provenance": "verified",
+  "docsUrl": "https://github.com/if-uri/urirun-artifacts",
+  "install": {
+    "mode": "urirun-extra",
+    "pipSpec": "urirun-artifacts @ git+https://github.com/if-uri/urirun-artifacts.git@v0.1.0"
+  },
+  "adapterKinds": ["local-function"]
+}

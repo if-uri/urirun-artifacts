@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "urirun-artifacts"
+version = "0.1.0"
+description = "URI-addressable artifact data-model registry for ifuri and urirun (artifact://)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "if-uri" }]
+dependencies = ["urirun>=0.4.14", "pydantic>=2"]
+
+[project.optional-dependencies]
+grpc = ["grpcio-tools>=1.60"]
+test = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://connect.ifuri.com/connectors/artifact"
+Repository = "https://github.com/if-uri/urirun-artifacts"
+
+[project.scripts]
+urirun-artifact = "urirun_artifacts.core:main"
+
+[project.entry-points."urirun.bindings"]
+artifact = "urirun_artifacts.core:urirun_bindings"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["urirun_artifacts*"]
+
+[tool.setuptools.package-data]
+urirun_artifacts = ["connector.manifest.json", "grpc/*.proto"]
