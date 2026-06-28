@@ -1,6 +1,7 @@
 """Offline tests for the artifact registry connector: bindings, schema/proto derivation,
 example generation and validation against the Pydantic source of truth."""
 import json
+from pathlib import Path
 
 import urirun_artifacts.core as c
 from urirun_artifacts import registry
@@ -116,6 +117,116 @@ def test_new_domains_registered():
     doms = registry.domains()
     for d in ("workflow", "scanning", "infra", "request", "accounting"):
         assert d in doms, d
+
+
+# --- connector + contract examples -----------------------------------------
+
+def _contract_kernel():
+    import pytest
+
+    return pytest.importorskip("urirun_contract")
+
+
+def _artifact_contracts():
+    uc = _contract_kernel()
+    return {
+        "schema/query/get": uc.Contract(
+            version="v1",
+            effect="query",
+            inp={"name": "str", "fmt": "?str"},
+            out={
+                "ok": "const:true",
+                "connector": "const:artifact",
+                "kind": "const:schema",
+                "live": "const:false",
+                "artifact": "obj",
+                "format": "enum:json-schema|proto|pydantic",
+            },
+            examples=(
+                {
+                    "payload": {"name": "faktura", "fmt": "json-schema"},
+                    "result": {
+                        "ok": True,
+                        "connector": "artifact",
+                        "kind": "schema",
+                        "live": False,
+                        "artifact": {"id": "faktura"},
+                        "format": "json-schema",
+                        "schema": {"type": "object"},
+                    },
+                },
+            ),
+        ),
+        "schema/query/validate": uc.Contract(
+            version="v1",
+            effect="query",
+            inp={"name": "str", "data": "?str"},
+            out={
+                "ok": "const:true",
+                "connector": "const:artifact",
+                "kind": "const:validation",
+                "live": "const:false",
+                "artifact": "obj",
+                "valid": "bool",
+            },
+            examples=(
+                {
+                    "payload": {"name": "faktura", "data": "{}"},
+                    "result": {
+                        "ok": True,
+                        "connector": "artifact",
+                        "kind": "validation",
+                        "live": False,
+                        "artifact": {"id": "faktura"},
+                        "valid": False,
+                        "errors": [{"field": "number", "message": "Field required"}],
+                    },
+                },
+            ),
+        ),
+    }
+
+
+def test_artifact_manifest_examples_satisfy_contracts():
+    uc = _contract_kernel()
+    contracts = _artifact_contracts()
+    uc.conform(contracts)
+
+    manifest = json.loads((Path(c.__file__).with_name("connector.manifest.json")).read_text())
+    examples = {item["uri"]: item for item in manifest["examples"]}
+
+    get_payload = examples["artifact://host/schema/query/get"]["payload"]
+    uc.check(contracts["schema/query/get"].inp, get_payload, "manifest schema payload")
+    get_result = c.get_schema(**get_payload)
+    assert uc.envelope_violation(contracts["schema/query/get"], get_result) is None
+
+    validate_payload = examples["artifact://host/schema/query/validate"]["payload"]
+    uc.check(contracts["schema/query/validate"].inp, validate_payload, "manifest validate payload")
+    validate_result = c.validate(**validate_payload)
+    assert uc.envelope_violation(contracts["schema/query/validate"], validate_result) is None
+
+
+def test_artifact_contract_reaches_alias_bindings_and_mcp_output_schema():
+    uc = _contract_kernel()
+    import urirun
+    from urirun_runtime.v2_mcp import to_mcp_tools
+
+    contracts = _artifact_contracts()
+    uc.attach_contracts(c.ARTIFACT, contracts)
+
+    bindings = c.urirun_bindings()["bindings"]
+    canonical = bindings["artifact://host/schema/query/get"]["meta"]["contract"]
+    alias = bindings["schema://host/schema/query/get"]["meta"]["contract"]
+    assert alias["output"] == canonical["output"]
+
+    registry_doc = c.urirun_bindings()
+    compiled = urirun.compile_registry(json.loads(json.dumps(registry_doc)))
+    tools = {tool["_uri"]: tool for tool in to_mcp_tools(compiled)}
+    schema_tool = tools["schema://host/schema/query/get"]
+    assert schema_tool["outputSchema"]["properties"]["format"] == {
+        "enum": ["json-schema", "proto", "pydantic"]
+    }
+    assert schema_tool["outputSchema"]["examples"][0]["format"] == "json-schema"
 
 
 def test_enum_values_in_schema():
