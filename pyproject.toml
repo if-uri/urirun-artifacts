@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "if-uri" }]
-dependencies = ["urirun>=0.4.14", "pydantic>=2"]
+dependencies = ["urirun>=0.4.190", "pydantic>=2"]
 
 [project.optional-dependencies]
 grpc = ["grpcio-tools>=1.60"]

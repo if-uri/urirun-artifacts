@@ -1,0 +1,26 @@
+name: ci
+
+# Run the package's tests on every push/PR. This is a real-source extracted package with
+# ~1.4k LOC, but until now it had NO CI at all (not even release). The package MUST be
+# pip-installed for tests to pass: routes execute through the local-function-subprocess
+# adapter, whose child process imports urirun_artifacts by name — a bare `pytest` without
+# an install fails (test_schema_alias_runs_through_compiled_registry). Install-then-test.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (pulls urirun) and run tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+          python -m pytest -q
